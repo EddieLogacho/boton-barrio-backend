@@ -4,12 +4,32 @@ const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
+
+// Configuración de Swagger (documentación interactiva de la API)
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Botón de Barrio API',
+      version: '1.0.0',
+      description:
+        'API REST para Botón de Barrio, una app de seguridad comunitaria. Permite reportar emergencias, gestionar alertas, comentarios y administración del sistema.',
+    },
+    servers: [{ url: 'http://localhost:3001', description: 'Servidor local' }],
+  },
+  apis: ['./index.js'],
+};
+
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Conexión a la base de datos boton_barrio
 const pool = new Pool({
@@ -22,10 +42,33 @@ const pool = new Pool({
 
 // Ruta de prueba, para saber si el servidor está vivo
 app.get('/', (req, res) => {
-  res.send('Servidor de Botón de Barrio funcionando 🏘️');
+  res.send(
+    'Servidor de Botón de Barrio funcionando 🏘️ — Documentación de la API disponible en <a href="/api-docs">/api-docs</a>'
+  );
 });
-
-// Ruta de login
+/**
+ * @openapi
+ * /login:
+ *   post:
+ *     summary: Inicia sesión con correo y contraseña
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               correo:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login exitoso, devuelve los datos del usuario
+ *       401:
+ *         description: Correo o contraseña incorrectos
+ */
 app.post('/login', async (req, res) => {
   const { correo, password } = req.body;
 
@@ -46,7 +89,33 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Ruta de registro
+/**
+ * @openapi
+ * /registro:
+ *   post:
+ *     summary: Registra un nuevo usuario
+ *     tags: [Autenticación]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               nombre:
+ *                 type: string
+ *               apellido:
+ *                 type: string
+ *               correo:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Usuario registrado correctamente
+ *       400:
+ *         description: El correo ya está registrado
+ */
 app.post('/registro', async (req, res) => {
   const { nombre, apellido, correo, password } = req.body;
 
@@ -69,7 +138,24 @@ app.post('/registro', async (req, res) => {
   }
 });
 
-// Ruta para obtener los datos de un usuario por su correo
+/**
+ * @openapi
+ * /usuario/{correo}:
+ *   get:
+ *     summary: Obtiene los datos de un usuario por su correo
+ *     tags: [Usuarios]
+ *     parameters:
+ *       - in: path
+ *         name: correo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Datos del usuario
+ *       404:
+ *         description: Usuario no encontrado
+ */
 app.get('/usuario/:correo', async (req, res) => {
   const { correo } = req.params;
 
@@ -90,7 +176,16 @@ app.get('/usuario/:correo', async (req, res) => {
   }
 });
 
-// Ruta para obtener todos los eventos
+/**
+ * @openapi
+ * /eventos:
+ *   get:
+ *     summary: Lista todos los eventos comunitarios
+ *     tags: [Eventos]
+ *     responses:
+ *       200:
+ *         description: Lista de eventos
+ */
 app.get('/eventos', async (req, res) => {
   try {
     const resultado = await pool.query('SELECT * FROM eventos ORDER BY fecha ASC');
@@ -101,7 +196,31 @@ app.get('/eventos', async (req, res) => {
   }
 });
 
-// Ruta para crear un nuevo evento
+/**
+ * @openapi
+ * /eventos:
+ *   post:
+ *     summary: Crea un nuevo evento comunitario
+ *     tags: [Eventos]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               titulo:
+ *                 type: string
+ *               descripcion:
+ *                 type: string
+ *               fecha:
+ *                 type: string
+ *               lugar:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Evento creado
+ */
 app.post('/eventos', async (req, res) => {
   const { titulo, descripcion, fecha, lugar } = req.body;
 
@@ -117,7 +236,16 @@ app.post('/eventos', async (req, res) => {
   }
 });
 
-// Ruta para obtener todas las alertas (con el total de comentarios de cada una)
+/**
+ * @openapi
+ * /alertas:
+ *   get:
+ *     summary: Lista todas las alertas, con el total de comentarios de cada una
+ *     tags: [Alertas]
+ *     responses:
+ *       200:
+ *         description: Lista de alertas
+ */
 app.get('/alertas', async (req, res) => {
   try {
     const resultado = await pool.query(
@@ -133,7 +261,36 @@ app.get('/alertas', async (req, res) => {
   }
 });
 
-// Ruta para crear una nueva alerta
+/**
+ * @openapi
+ * /alertas:
+ *   post:
+ *     summary: Crea una nueva alerta (botón de pánico o reporte manual)
+ *     tags: [Alertas]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               tipo:
+ *                 type: string
+ *               mensaje:
+ *                 type: string
+ *               latitud:
+ *                 type: number
+ *               longitud:
+ *                 type: number
+ *               creado_por:
+ *                 type: string
+ *               foto:
+ *                 type: string
+ *                 description: Imagen codificada en base64 (opcional)
+ *     responses:
+ *       200:
+ *         description: Alerta creada
+ */
 app.post('/alertas', async (req, res) => {
   const { tipo, mensaje, latitud, longitud, creado_por, foto } = req.body;
 
@@ -149,8 +306,36 @@ app.post('/alertas', async (req, res) => {
   }
 });
 
-// Ruta para agregar o actualizar la descripción y/o la foto de una alerta.
-// Solo puede hacerlo quien creó la alerta.
+/**
+ * @openapi
+ * /alertas/{id}:
+ *   put:
+ *     summary: Actualiza la descripción y/o la foto de una alerta (solo el creador)
+ *     tags: [Alertas]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               mensaje:
+ *                 type: string
+ *               foto:
+ *                 type: string
+ *               creado_por:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Alerta actualizada
+ *       403:
+ *         description: Solo quien creó la alerta puede modificarla
+ */
 app.put('/alertas/:id', async (req, res) => {
   const { id } = req.params;
   const { mensaje, foto, creado_por } = req.body;
@@ -187,7 +372,26 @@ app.put('/alertas/:id', async (req, res) => {
   }
 });
 
-// Ruta para obtener los comentarios de una alerta
+/**
+ * @openapi
+ * /alertas/{id}/comentarios:
+ *   get:
+ *     summary: Lista los comentarios de una alerta
+ *     tags: [Comentarios]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: correo
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de comentarios
+ */
 app.get('/alertas/:id/comentarios', async (req, res) => {
   const alertaId = parseInt(req.params.id, 10);
   const correo = req.query.correo || '';
@@ -216,7 +420,33 @@ app.get('/alertas/:id/comentarios', async (req, res) => {
   }
 });
 
-// Ruta para agregar un comentario a una alerta
+/**
+ * @openapi
+ * /alertas/{id}/comentarios:
+ *   post:
+ *     summary: Agrega un comentario a una alerta
+ *     tags: [Comentarios]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               correo:
+ *                 type: string
+ *               texto:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Comentario creado
+ */
 app.post('/alertas/:id/comentarios', async (req, res) => {
   const alertaId = parseInt(req.params.id, 10);
   const { correo, texto } = req.body;
@@ -258,7 +488,34 @@ app.post('/alertas/:id/comentarios', async (req, res) => {
   }
 });
 
-// Ruta para borrar un comentario (solo su autor)
+/**
+ * @openapi
+ * /alertas/{id}/comentarios/{comentarioId}:
+ *   delete:
+ *     summary: Elimina un comentario (solo su propio autor)
+ *     tags: [Comentarios]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: path
+ *         name: comentarioId
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: correo
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Comentario eliminado
+ *       403:
+ *         description: Solo puedes borrar tus propios comentarios
+ */
 app.delete('/alertas/:id/comentarios/:comentarioId', async (req, res) => {
   const alertaId = parseInt(req.params.id, 10);
   const comentarioId = parseInt(req.params.comentarioId, 10);
@@ -285,7 +542,16 @@ app.delete('/alertas/:id/comentarios/:comentarioId', async (req, res) => {
   }
 });
 
-// Obtener los números de contacto de emergencia (cualquiera puede verlos)
+/**
+ * @openapi
+ * /contactos-emergencia:
+ *   get:
+ *     summary: Obtiene los números de contacto de emergencia (policía, bomberos, ambulancia)
+ *     tags: [Emergencias]
+ *     responses:
+ *       200:
+ *         description: Números actuales
+ */
 app.get('/contactos-emergencia', async (req, res) => {
   try {
     const resultado = await pool.query('SELECT tipo, numero FROM contactos_emergencia');
@@ -324,7 +590,24 @@ async function exigirAdmin(req, res, next) {
   }
 }
 
-// Listar todos los usuarios (sin la contraseña)
+/**
+ * @openapi
+ * /admin/usuarios:
+ *   get:
+ *     summary: Lista todos los usuarios (solo administradores)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de usuarios
+ *       403:
+ *         description: No tienes permisos de administrador
+ */
 app.get('/admin/usuarios', exigirAdmin, async (req, res) => {
   try {
     const resultado = await pool.query(
@@ -337,7 +620,27 @@ app.get('/admin/usuarios', exigirAdmin, async (req, res) => {
   }
 });
 
-// Eliminar un usuario (un administrador no puede eliminarse a sí mismo)
+/**
+ * @openapi
+ * /admin/usuarios/{correo}:
+ *   delete:
+ *     summary: Elimina un usuario (solo administradores; no puede eliminarse a sí mismo)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: path
+ *         name: correo
+ *         required: true
+ *         schema:
+ *           type: string
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Usuario eliminado
+ */
 app.delete('/admin/usuarios/:correo', exigirAdmin, async (req, res) => {
   const { correo } = req.params;
   const correoAdmin = req.query.correo_admin;
@@ -360,7 +663,27 @@ app.delete('/admin/usuarios/:correo', exigirAdmin, async (req, res) => {
   }
 });
 
-// Eliminar una alerta (y sus comentarios, por la relación en cascada)
+/**
+ * @openapi
+ * /admin/alertas/{id}:
+ *   delete:
+ *     summary: Elimina una alerta y sus comentarios (solo administradores)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Alerta eliminada
+ */
 app.delete('/admin/alertas/:id', exigirAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -378,7 +701,22 @@ app.delete('/admin/alertas/:id', exigirAdmin, async (req, res) => {
   }
 });
 
-// Listar todos los comentarios, con el tipo de alerta a la que pertenecen
+/**
+ * @openapi
+ * /admin/comentarios:
+ *   get:
+ *     summary: Lista todos los comentarios con el tipo de alerta (solo administradores)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Lista de comentarios
+ */
 app.get('/admin/comentarios', exigirAdmin, async (req, res) => {
   try {
     const resultado = await pool.query(
@@ -394,7 +732,27 @@ app.get('/admin/comentarios', exigirAdmin, async (req, res) => {
   }
 });
 
-// Eliminar un comentario individual, sin borrar toda la alerta
+/**
+ * @openapi
+ * /admin/comentarios/{id}:
+ *   delete:
+ *     summary: Elimina un comentario individual (solo administradores)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Comentario eliminado
+ */
 app.delete('/admin/comentarios/:id', exigirAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -412,7 +770,37 @@ app.delete('/admin/comentarios/:id', exigirAdmin, async (req, res) => {
   }
 });
 
-// Actualizar un número de contacto de emergencia (solo administrador)
+/**
+ * @openapi
+ * /admin/contactos-emergencia/{tipo}:
+ *   put:
+ *     summary: Actualiza un número de contacto de emergencia (solo administradores)
+ *     tags: [Administrador]
+ *     parameters:
+ *       - in: path
+ *         name: tipo
+ *         required: true
+ *         schema:
+ *           type: string
+ *           enum: [policia, bomberos, ambulancia]
+ *       - in: query
+ *         name: correo_admin
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               numero:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Número actualizado
+ */
 app.put('/admin/contactos-emergencia/:tipo', exigirAdmin, async (req, res) => {
   const { tipo } = req.params;
   const { numero } = req.body;
@@ -438,7 +826,25 @@ app.put('/admin/contactos-emergencia/:tipo', exigirAdmin, async (req, res) => {
   }
 });
 
-// Ruta del asistente de seguridad con IA
+/**
+ * @openapi
+ * /asistente:
+ *   post:
+ *     summary: Envía una pregunta al asistente de seguridad con IA (Google Gemini)
+ *     tags: [Asistente IA]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               pregunta:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Respuesta generada por el modelo
+ */
 app.post('/asistente', async (req, res) => {
   const { pregunta } = req.body;
 
@@ -460,4 +866,5 @@ app.post('/asistente', async (req, res) => {
 const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log(`Documentación de la API disponible en http://localhost:${PORT}/api-docs`);
 });
